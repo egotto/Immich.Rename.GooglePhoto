@@ -99,16 +99,6 @@ DateTime? GetMetadataDateTime(IReadOnlyList<MetadataExtractor.Directory> directo
     var quickTimeDirectory = directories.FirstOrDefault(d => d.Name == quickTimeDirectoryName);
     var fileDirectory = directories.FirstOrDefault(d => d.Name == fileDirectoryName);
 
-    if (exifDirectory != null)
-    {
-        var dateTimeTag = exifDirectory.Tags.FirstOrDefault(t => t.Name == "Date/Time");
-        
-        if (exifDirectory.TryGetDateTime( MetadataExtractor.Formats.Exif.ExifDirectoryBase.TagDateTime, out var dateTime))
-        {
-            return dateTime;
-        }
-    }
-
     if (exifSubDirectory != null)
     {
         var dateTimeOriginalTag = exifSubDirectory.Tags.FirstOrDefault(t => t.Name == "Date/Time Original");
@@ -120,6 +110,16 @@ DateTime? GetMetadataDateTime(IReadOnlyList<MetadataExtractor.Directory> directo
         if (exifSubDirectory.TryGetDateTime(MetadataExtractor.Formats.Exif.ExifSubIfdDirectory.TagDateTimeDigitized, out var dateTimeDigitized))
         {
             return dateTimeDigitized;
+        }
+    }
+
+    if (exifDirectory != null)
+    {
+        var dateTimeTag = exifDirectory.Tags.FirstOrDefault(t => t.Name == "Date/Time");
+        
+        if (exifDirectory.TryGetDateTime( MetadataExtractor.Formats.Exif.ExifDirectoryBase.TagDateTime, out var dateTime))
+        {
+            return dateTime;
         }
     }
 
