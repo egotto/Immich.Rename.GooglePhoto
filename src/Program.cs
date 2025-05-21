@@ -1,5 +1,4 @@
-﻿using System.Globalization;
-using MetadataExtractor;
+﻿using MetadataExtractor;
 
 bool isDryRun = false;
 string inputDirectoryPath = string.Empty;
@@ -75,7 +74,7 @@ foreach (var file in files)
         if (!isDryRun)
         {
             ChangeMetadataDateTime(file, pathDateTime);
-            SaveFileWithNewDateTime(file, pathDateTime);
+            SaveFileWithNewDateTime(file, pathDateTime, true);
         }
     }
 }
@@ -86,6 +85,7 @@ void ChangeMetadataDateTime(string filePath, DateTime dateTime)
     var exifDirectory = directories.OfType<MetadataExtractor.Formats.Exif.ExifDirectoryBase>().FirstOrDefault();
     var exifSubDirectory = directories.OfType<MetadataExtractor.Formats.Exif.ExifSubIfdDirectory>().FirstOrDefault();
     var quickTimeDirectory = directories.OfType<MetadataExtractor.Formats.QuickTime.QuickTimeMovieHeaderDirectory>().FirstOrDefault();
+    var fileDirectory = directories.OfType<MetadataExtractor.Formats.FileSystem.FileMetadataDirectory>().FirstOrDefault();
 
     if (exifSubDirectory != null)
     {
@@ -103,19 +103,57 @@ void ChangeMetadataDateTime(string filePath, DateTime dateTime)
         quickTimeDirectory.Set(MetadataExtractor.Formats.QuickTime.QuickTimeMovieHeaderDirectory.TagCreated, dateTime);
         quickTimeDirectory.Set(MetadataExtractor.Formats.QuickTime.QuickTimeMovieHeaderDirectory.TagModified, dateTime);
     }
+
+    if (fileDirectory != null)
+    {
+        fileDirectory.Set(MetadataExtractor.Formats.FileSystem.FileMetadataDirectory.TagFileModifiedDate, dateTime);
+    }
 }
 
-void SaveFileWithNewDateTime(string filePath, DateTime dateTime)
+void SaveFileWithNewDateTime(string filePath, DateTime dateTime, bool hardRewrite = false)
 {
     var fileInfo = new FileInfo(filePath);
-    var newFileName = $"{dateTime:yyyy-MM-dd_HH-mm-ss}{fileInfo.Extension}";
+    var newFileName = $"{dateTime:yyyy-MM-dd}_{fileInfo.Name}";
     var newFilePath = Path.Combine(outputDirectoryPath, newFileName);
     Console.WriteLine($"\tRenaming to: {newFilePath}");
     System.IO.Directory.CreateDirectory(outputDirectoryPath);
     File.Copy(filePath, newFilePath, true);
+
+    if (hardRewrite)
+        SetExifCreateDateFromFileModDate(newFilePath, dateTime);
+
     File.SetCreationTime(newFilePath, dateTime);
     File.SetLastWriteTime(newFilePath, dateTime);
     File.SetLastAccessTime(newFilePath, dateTime);
+}
+
+void SetExifCreateDateFromFileModDate(string filePath, DateTime dateTime)
+{
+    var modDate = dateTime.ToString("yyyy:MM:dd HH:mm:ss");
+    var command = $"exiftool -overwrite_original -CreateDate='{modDate}' -ModifyDate='{modDate}' '{filePath}'";
+
+    var process = new System.Diagnostics.Process
+    {
+        StartInfo = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "/bin/bash",
+            Arguments = $"-c \"{command}\"",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        }
+    };
+
+    process.Start();
+    string output = process.StandardOutput.ReadToEnd();
+    string error = process.StandardError.ReadToEnd();
+    process.WaitForExit();
+
+    if (!string.IsNullOrEmpty(output))
+        Console.WriteLine(output);
+    if (!string.IsNullOrEmpty(error))
+        Console.WriteLine($"Error: {error}");
 }
 
 DateTime? GetMetadataDateTime(IReadOnlyList<MetadataExtractor.Directory> directories, DateTime pathDateTime)
