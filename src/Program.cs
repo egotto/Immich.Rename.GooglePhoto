@@ -55,7 +55,10 @@ foreach (var file in files)
     var fileDate = fileInfo.CreationTime;
     Console.WriteLine($"File: {file}{Environment.NewLine}\tDate: {fileDate}");
     var directories = ImageMetadataReader.ReadMetadata(file);
-    var metadataTime = GetMetadataDateTime(directories);
+    var directoryName = fileInfo.DirectoryName!;
+    var year_month = directoryName.Split(Path.DirectorySeparatorChar).TakeLast(2).Select(_=>int.Parse(_)).ToArray();
+    var pathDateTime = new DateTime(year_month[0], year_month[1], 1);
+    var metadataTime = GetMetadataDateTime(directories, pathDateTime);
     if (metadataTime != null && metadataTime < fileDate)
     {
         Console.WriteLine($"\tMetadata Date: {metadataTime}");
@@ -67,9 +70,7 @@ foreach (var file in files)
     else
     {
         Console.WriteLine("\tNo metadata date found or it is not earlier than file date.");
-        var directoryName = fileInfo.DirectoryName!;
-        var year_month = directoryName.Split(Path.DirectorySeparatorChar).TakeLast(2).Select(_=>int.Parse(_)).ToArray();
-        var pathDateTime = new DateTime(year_month[0], year_month[1], 1);
+        
         Console.WriteLine($"\tUsing path date: {pathDateTime}");
         if (!isDryRun)
         {
@@ -92,7 +93,7 @@ void SaveFileWithNewDateTime(string filePath, DateTime dateTime)
     File.SetLastAccessTime(newFilePath, dateTime);
 }
 
-DateTime? GetMetadataDateTime(IReadOnlyList<MetadataExtractor.Directory> directories)
+DateTime? GetMetadataDateTime(IReadOnlyList<MetadataExtractor.Directory> directories, DateTime pathDateTime)
 {
     var exifDirectory = directories.FirstOrDefault(d => d.Name == exifDirectoryName);
     var exifSubDirectory = directories.FirstOrDefault(d => d.Name == exifSubDirectoryName);
@@ -104,12 +105,25 @@ DateTime? GetMetadataDateTime(IReadOnlyList<MetadataExtractor.Directory> directo
         var dateTimeOriginalTag = exifSubDirectory.Tags.FirstOrDefault(t => t.Name == "Date/Time Original");
         if (exifSubDirectory.TryGetDateTime(MetadataExtractor.Formats.Exif.ExifSubIfdDirectory.TagDateTimeOriginal, out var dateTimeOriginal))
         {
-            return dateTimeOriginal;
+            if (dateTimeOriginal.Year == pathDateTime.Year && dateTimeOriginal.Month == pathDateTime.Month)
+                return dateTimeOriginal;
         }
 
         if (exifSubDirectory.TryGetDateTime(MetadataExtractor.Formats.Exif.ExifSubIfdDirectory.TagDateTimeDigitized, out var dateTimeDigitized))
         {
-            return dateTimeDigitized;
+            if (dateTimeDigitized.Year == pathDateTime.Year && dateTimeDigitized.Month == pathDateTime.Month)
+                return dateTimeDigitized;
+        }
+    }
+
+    if (exifDirectory != null)
+    {
+        var dateTimeTag = exifDirectory.Tags.FirstOrDefault(t => t.Name == "Date/Time");
+        
+        if (exifDirectory.TryGetDateTime( MetadataExtractor.Formats.Exif.ExifDirectoryBase.TagDateTime, out var dateTime))
+        {
+            if (dateTime.Year == pathDateTime.Year && dateTime.Month == pathDateTime.Month)
+                return dateTime;
         }
     }
 
@@ -127,12 +141,14 @@ DateTime? GetMetadataDateTime(IReadOnlyList<MetadataExtractor.Directory> directo
     {
         if (quickTimeDirectory.TryGetDateTime(MetadataExtractor.Formats.QuickTime.QuickTimeMovieHeaderDirectory.TagModified, out var modificationDate))
         {
-            return modificationDate;
+            if (modificationDate.Year == pathDateTime.Year && modificationDate.Month == pathDateTime.Month)
+                return modificationDate;
         }
 
-        if (quickTimeDirectory.TryGetDateTime(MetadataExtractor.Formats.QuickTime.QuickTimeMovieHeaderDirectory.TagModified, out var creationDate))
+        if (quickTimeDirectory.TryGetDateTime(MetadataExtractor.Formats.QuickTime.QuickTimeMovieHeaderDirectory.TagCreated, out var creationDate))
         {
-            return creationDate;
+            if (creationDate.Year == pathDateTime.Year && creationDate.Month == pathDateTime.Month)
+                return creationDate;
         }
     }
 
@@ -140,7 +156,8 @@ DateTime? GetMetadataDateTime(IReadOnlyList<MetadataExtractor.Directory> directo
     {
         if (fileDirectory.TryGetDateTime(MetadataExtractor.Formats.FileSystem.FileMetadataDirectory.TagFileModifiedDate, out var fileModifiedDate))
         {
-            return fileModifiedDate;
+            if (fileModifiedDate.Year == pathDateTime.Year && fileModifiedDate.Month == pathDateTime.Month)
+                return fileModifiedDate;
         }
     }
 
