@@ -56,7 +56,7 @@ foreach (var file in files)
     Console.WriteLine($"File: {file}{Environment.NewLine}\tDate: {fileDate}");
     var directories = ImageMetadataReader.ReadMetadata(file);
     var directoryName = fileInfo.DirectoryName!;
-    var year_month = directoryName.Split(Path.DirectorySeparatorChar).TakeLast(2).Select(_=>int.Parse(_)).ToArray();
+    var year_month = directoryName.Split(Path.DirectorySeparatorChar).TakeLast(2).Select(_ => int.Parse(_)).ToArray();
     var pathDateTime = new DateTime(year_month[0], year_month[1], 1);
     var metadataTime = GetMetadataDateTime(directories, pathDateTime);
     if (metadataTime != null && metadataTime < fileDate)
@@ -70,13 +70,38 @@ foreach (var file in files)
     else
     {
         Console.WriteLine("\tNo metadata date found or it is not earlier than file date.");
-        
+
         Console.WriteLine($"\tUsing path date: {pathDateTime}");
         if (!isDryRun)
         {
+            ChangeMetadataDateTime(file, pathDateTime);
             SaveFileWithNewDateTime(file, pathDateTime);
         }
-        
+    }
+}
+
+void ChangeMetadataDateTime(string filePath, DateTime dateTime)
+{
+    var directories = ImageMetadataReader.ReadMetadata(filePath);
+    var exifDirectory = directories.OfType<MetadataExtractor.Formats.Exif.ExifDirectoryBase>().FirstOrDefault();
+    var exifSubDirectory = directories.OfType<MetadataExtractor.Formats.Exif.ExifSubIfdDirectory>().FirstOrDefault();
+    var quickTimeDirectory = directories.OfType<MetadataExtractor.Formats.QuickTime.QuickTimeMovieHeaderDirectory>().FirstOrDefault();
+
+    if (exifSubDirectory != null)
+    {
+        exifSubDirectory.Set(MetadataExtractor.Formats.Exif.ExifSubIfdDirectory.TagDateTimeOriginal, dateTime);
+        exifSubDirectory.Set(MetadataExtractor.Formats.Exif.ExifSubIfdDirectory.TagDateTimeDigitized, dateTime);
+    }
+
+    if (exifDirectory != null)
+    {
+        exifDirectory.Set(MetadataExtractor.Formats.Exif.ExifDirectoryBase.TagDateTime, dateTime);
+    }
+
+    if (quickTimeDirectory != null)
+    {
+        quickTimeDirectory.Set(MetadataExtractor.Formats.QuickTime.QuickTimeMovieHeaderDirectory.TagCreated, dateTime);
+        quickTimeDirectory.Set(MetadataExtractor.Formats.QuickTime.QuickTimeMovieHeaderDirectory.TagModified, dateTime);
     }
 }
 
@@ -95,10 +120,10 @@ void SaveFileWithNewDateTime(string filePath, DateTime dateTime)
 
 DateTime? GetMetadataDateTime(IReadOnlyList<MetadataExtractor.Directory> directories, DateTime pathDateTime)
 {
-    var exifDirectory = directories.FirstOrDefault(d => d.Name == exifDirectoryName);
-    var exifSubDirectory = directories.FirstOrDefault(d => d.Name == exifSubDirectoryName);
-    var quickTimeDirectory = directories.FirstOrDefault(d => d.Name == quickTimeDirectoryName);
-    var fileDirectory = directories.FirstOrDefault(d => d.Name == fileDirectoryName);
+    var exifDirectory = directories.OfType<MetadataExtractor.Formats.Exif.ExifDirectoryBase>().FirstOrDefault();
+    var exifSubDirectory = directories.OfType<MetadataExtractor.Formats.Exif.ExifSubIfdDirectory>().FirstOrDefault();
+    var quickTimeDirectory = directories.OfType<MetadataExtractor.Formats.QuickTime.QuickTimeMovieHeaderDirectory>().FirstOrDefault();
+    var fileDirectory = directories.OfType<MetadataExtractor.Formats.FileSystem.FileMetadataDirectory>().FirstOrDefault();
 
     if (exifSubDirectory != null)
     {
