@@ -55,3 +55,4 @@ nunit-*.xml
 
 src/test-data/*
 
+src/output/*
